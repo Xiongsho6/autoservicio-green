@@ -32,6 +32,15 @@ Antes de iniciar, asegúrate de tener instalado lo siguiente según tu sistema o
 
 ---
 
+## 🛠️ Configuración Inicial de la Base de Datos
+
+Antes de inicializar los microservicios, se deben otorgar los privilegios necesarios al usuario `root` en MariaDB/MySQL para permitir la conexión del backend:
+
+ALTER USER 'root'@'localhost' IDENTIFIED BY '';
+GRANT ALL PRIVILEGES ON _._ TO 'root'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EXIT;
+
 ### Paso 2: Levantar el Backend Modular (Java)
 
 Navega hasta la carpeta raíz del servidor central:
