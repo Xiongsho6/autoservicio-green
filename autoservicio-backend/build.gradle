@@ -1,0 +1,37 @@
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'application'
+
+    repositories {
+        mavenCentral()
+    }
+
+    run {
+        standardInput = System.in
+    }
+
+    dependencies {
+        implementation 'com.google.code.gson:gson:2.10.1'
+        implementation 'mysql:mysql-connector-java:8.0.33'
+        implementation 'com.zaxxer:HikariCP:5.1.0'
+    }
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+gradle.startParameter.consoleOutput = org.gradle.api.logging.configuration.ConsoleOutput.Plain
+
+project(':ms-gateway') {
+    application { mainClass = 'com.autoservicio.gateway.Gateway' }
+}
+
+project(':ms-inventario') {
+    application { mainClass = 'com.autoservicio.inventario.Inventario' }
+}
+
+project(':ms-ventas') {
+    application { mainClass = 'com.autoservicio.ventas.Ventas' }
+}
