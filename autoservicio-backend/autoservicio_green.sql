@@ -1,3 +1,4 @@
+SET FOREIGN_KEY_CHECKS = 0;
 CREATE DATABASE IF NOT EXISTS autoservicio_green;
 USE autoservicio_green;
 
@@ -26,7 +27,7 @@ CREATE TABLE `ventas_detalle` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `venta_id` INT NOT NULL,
   `producto_id` INT NOT NULL,
-  `amount` INT NOT NULL,
+  `cantidad` INT NOT NULL,
   `precio_unitario` DECIMAL(10,2) NOT NULL,
   `subtotal` DECIMAL(10,2) NOT NULL,
   CONSTRAINT `ventas_detalle_ibfk_1` FOREIGN KEY (`venta_id`) REFERENCES `ventas_cabecera` (`id`) ON DELETE CASCADE,
@@ -81,3 +82,4 @@ INSERT INTO `productos` (`id`, `codigo_barras`, `nombre`, `precio`, `stock`) VAL
 -- ── SECCIÓN 4: COMPLEMENTOS MULTIPROPÓSITO (Códigos 7504xx)
 (29, '750401', 'Bebida Energizante Red Bull 250ml', 8.50, 55),
 (30, '750402', 'Agua San Luis Sin Gas 1L', 2.50, 190);
+SET FOREIGN_KEY_CHECKS = 1;
