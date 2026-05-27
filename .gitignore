@@ -1,0 +1,8 @@
+# Excluir archivos temporales de Gradle
+autoservicio-backend/.gradle/
+autoservicio-backend/build/
+autoservicio-backend/bin/
+autoservicio-backend/*/build/
+
+# Excluir el ejecutable de C++ (se compila localmente)
+autoservicio-caja/Cliente.exe
