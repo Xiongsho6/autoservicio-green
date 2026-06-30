@@ -34,9 +34,14 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    ports:
-      - "8081:8081"
-      - "9081:9081"
+    # FIX (#5 - API Gateway Bypass): antes tenía "ports:" exponiendo
+    # 8081/9081 directo al host, permitiendo saltarse la autenticación
+    # de ms-gateway. Con "expose:" sigue siendo alcanzable entre
+    # contenedores (ms-gateway, ms-consola, prometheus) pero ya no
+    # queda publicado al exterior.
+    expose:
+      - "8081"
+      - "9081"
 
   ms-ventas:
     build:
@@ -53,9 +58,10 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    ports:
-      - "8082:8082"
-      - "9082:9082"
+    # FIX (#5 - API Gateway Bypass): mismo cambio que ms-inventario.
+    expose:
+      - "8082"
+      - "9082"
 
   ms-gateway:
     build:
