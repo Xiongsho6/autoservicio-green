@@ -7,6 +7,13 @@ import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
+import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -56,6 +63,50 @@ public class Gateway {
 
     private static final Logger LOG = Logger.getLogger("Gateway");
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // METRICS — Exposición de métricas Prometheus en /metrics
+    // ═══════════════════════════════════════════════════════════════════════
+
+    static final class Metrics {
+        static final PrometheusMeterRegistry REGISTRY = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+        private static final Counter PETICIONES_TOTAL = Counter.builder("ms_gateway_peticiones_total")
+                .description("Total de peticiones HTTP recibidas por ms-gateway")
+                .register(REGISTRY);
+
+        private static final Counter ERRORES_TOTAL = Counter.builder("ms_gateway_errores_total")
+                .description("Total de respuestas de error (>=400) de ms-gateway")
+                .register(REGISTRY);
+
+        private static final Timer DURACION_PETICION = Timer.builder("ms_gateway_peticion_duracion_segundos")
+                .description("Duracion de procesamiento de peticiones HTTP en ms-gateway")
+                .register(REGISTRY);
+
+        private Metrics() {
+        }
+
+        static void init() {
+            new JvmMemoryMetrics().bindTo(REGISTRY);
+            new JvmThreadMetrics().bindTo(REGISTRY);
+            new ProcessorMetrics().bindTo(REGISTRY);
+        }
+
+        static void handleMetrics(HttpExchange exchange) throws IOException {
+            byte[] body = REGISTRY.scrape().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        }
+
+        static void registrar(int statusCode, long nanos) {
+            PETICIONES_TOTAL.increment();
+            if (statusCode >= 400) ERRORES_TOTAL.increment();
+            DURACION_PETICION.record(java.time.Duration.ofNanos(nanos));
+        }
+    }
+
     // ── Configuración ──────────────────────────────────────────────────────
     private static final int PUERTO_HTTP = 8080;
     // [DOCKER] Hosts configurables por variable de entorno. En local, sin
@@ -76,10 +127,12 @@ public class Gateway {
 
     public static void main(String[] args) {
         System.out.println("=== API GATEWAY HTTP REST [Puerto " + PUERTO_HTTP + "] ===");
+        Metrics.init();
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(PUERTO_HTTP), 0);
             server.createContext("/api/carrito", new CarritoHandler());
             server.createContext("/api/dashboard", new DashboardHandler());
+            server.createContext("/metrics", Metrics::handleMetrics);
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
             System.out.println("Servidor HTTP listo. Esperando peticiones...");
@@ -137,6 +190,10 @@ public class Gateway {
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
         }
+        Object inicio = exchange.getAttribute("metricsStart");
+        if (inicio instanceof Long) {
+            Metrics.registrar(status, System.nanoTime() - (Long) inicio);
+        }
     }
 
     static String obtenerHora() {
@@ -151,6 +208,7 @@ public class Gateway {
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            exchange.setAttribute("metricsStart", System.nanoTime());
             agregarCORS(exchange, "POST, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -376,6 +434,7 @@ public class Gateway {
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            exchange.setAttribute("metricsStart", System.nanoTime());
             agregarCORS(exchange, "GET, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {

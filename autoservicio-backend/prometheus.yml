@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "ms-gateway"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ms-gateway:8080"]
+
+  - job_name: "ms-inventario"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ms-inventario:9081"]
+
+  - job_name: "ms-ventas"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ms-ventas:9082"]

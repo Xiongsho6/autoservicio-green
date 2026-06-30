@@ -4,15 +4,27 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
+import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -47,8 +59,66 @@ public class Inventario {
             logVentas.pollLast();
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // METRICS — Exposición de métricas Prometheus en /metrics
+    // ═══════════════════════════════════════════════════════════════════════
+
+    static final class Metrics {
+        private static final Logger LOG = Logger.getLogger("Metrics");
+        private static final int PUERTO_METRICS = 9081;
+
+        static final PrometheusMeterRegistry REGISTRY = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+        private static final Counter PETICIONES_TOTAL = Counter.builder("ms_inventario_peticiones_total")
+                .description("Total de peticiones recibidas por ms-inventario")
+                .register(REGISTRY);
+
+        private static final Counter ERRORES_TOTAL = Counter.builder("ms_inventario_errores_total")
+                .description("Total de errores al procesar peticiones en ms-inventario")
+                .register(REGISTRY);
+
+        private static final Timer DURACION_PETICION = Timer.builder("ms_inventario_peticion_duracion_segundos")
+                .description("Duracion de procesamiento de peticiones en ms-inventario")
+                .register(REGISTRY);
+
+        private Metrics() {
+        }
+
+        static void init() {
+            new JvmMemoryMetrics().bindTo(REGISTRY);
+            new JvmThreadMetrics().bindTo(REGISTRY);
+            new ProcessorMetrics().bindTo(REGISTRY);
+
+            try {
+                HttpServer server = HttpServer.create(new InetSocketAddress(PUERTO_METRICS), 0);
+                server.createContext("/metrics", Metrics::handleMetrics);
+                server.setExecutor(null);
+                server.start();
+                LOG.info("[METRICS] Endpoint Prometheus disponible en :" + PUERTO_METRICS + "/metrics");
+            } catch (IOException e) {
+                LOG.warning("[METRICS] No se pudo iniciar el servidor de metricas: " + e.getMessage());
+            }
+        }
+
+        private static void handleMetrics(HttpExchange exchange) throws IOException {
+            byte[] body = REGISTRY.scrape().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        }
+
+        static void registrarPeticion(String accion, boolean exito, long nanos) {
+            PETICIONES_TOTAL.increment();
+            if (!exito) ERRORES_TOTAL.increment();
+            DURACION_PETICION.record(java.time.Duration.ofNanos(nanos));
+        }
+    }
+
     public static void main(String[] args) {
         ConnectionPool.init();
+        Metrics.init();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("[INFO] Apagando MS-INVENTARIO...");
@@ -513,9 +583,12 @@ public class Inventario {
         }
 
         static JsonObject procesarPeticion(String jsonRaw) {
+            long inicio = System.nanoTime();
+            String accion = "VENDER";
+            boolean exito = true;
             try {
                 JsonObject req = JsonParser.parseString(jsonRaw).getAsJsonObject();
-                String accion = req.has("accion") ? req.get("accion").getAsString() : "VENDER";
+                accion = req.has("accion") ? req.get("accion").getAsString() : "VENDER";
 
                 if ("COMPENSAR".equals(accion)) {
                     return InventarioRepository.compensarStock(req.getAsJsonArray("productos"));
@@ -538,11 +611,14 @@ public class Inventario {
                     return InventarioRepository.procesarVenta(req.getAsJsonArray("productos"));
                 }
             } catch (Exception e) {
+                exito = false;
                 LOG.severe("[SERVICIO] Error procesando petición: " + e.getMessage());
                 JsonObject err = new JsonObject();
                 err.addProperty("status", "ERROR");
                 err.addProperty("mensaje", "Error interno: " + e.getMessage());
                 return err;
+            } finally {
+                Metrics.registrarPeticion(accion, exito, System.nanoTime() - inicio);
             }
         }
 
