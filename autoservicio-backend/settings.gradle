@@ -1,0 +1,5 @@
+rootProject.name = 'proyecto-autoservicio'
+
+include 'ms-gateway'
+include 'ms-inventario'
+include 'ms-ventas'

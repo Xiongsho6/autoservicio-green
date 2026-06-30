@@ -1,0 +1,14 @@
+# Excluir archivos temporales de Gradle
+autoservicio-backend/.gradle/
+autoservicio-backend/build/
+autoservicio-backend/bin/
+autoservicio-backend/*/build/
+autoservicio-backend/gradle-8.5/
+autoservicio-backend/gson.jar
+
+# Excluir el ejecutable de C++
+autoservicio-caja/Cliente.exe
+
+# Docker
+**/mysql_data/
+

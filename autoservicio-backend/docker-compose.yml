@@ -1,0 +1,71 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: autoservicio-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: autoservicio_green
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./autoservicio_green.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ms-inventario:
+    build:
+      context: .
+      dockerfile: ms-inventario/Dockerfile
+    container_name: ms-inventario
+    restart: unless-stopped
+    environment:
+      DB_URL: "jdbc:mysql://mysql:3306/autoservicio_green?useSSL=false&serverTimezone=UTC"
+      DB_USER: "root"
+      DB_PASSWORD: ""
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+
+  ms-ventas:
+    build:
+      context: .
+      dockerfile: ms-ventas/Dockerfile
+    container_name: ms-ventas
+    restart: unless-stopped
+    environment:
+      DB_URL: "jdbc:mysql://mysql:3306/autoservicio_green?useSSL=false&serverTimezone=UTC"
+      DB_USER: "root"
+      DB_PASSWORD: ""
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+
+  ms-gateway:
+    build:
+      context: .
+      dockerfile: ms-gateway/Dockerfile
+    container_name: ms-gateway
+    restart: unless-stopped
+    environment:
+      GATEWAY_TOKEN: "AUTOSERVICIO_GREEN_2024"
+      MS_INVENTARIO_HOST: "ms-inventario"
+      MS_VENTAS_HOST: "ms-ventas"
+    depends_on:
+      - ms-inventario
+      - ms-ventas
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql_data:
