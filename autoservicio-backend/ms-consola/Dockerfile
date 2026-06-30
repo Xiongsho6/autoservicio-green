@@ -9,15 +9,13 @@ COPY ms-inventario ms-inventario
 COPY ms-ventas ms-ventas
 COPY ms-consola ms-consola
 
-RUN gradle :ms-ventas:shadowJar -x test --no-daemon
+RUN gradle :ms-consola:shadowJar -x test --no-daemon
 
 # ── Etapa 2: imagen final, solo runtime ────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-COPY --from=build /app/ms-ventas/build/libs/*-all.jar app.jar
-
-EXPOSE 8082
+COPY --from=build /app/ms-consola/build/libs/*-all.jar app.jar
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -9,17 +9,18 @@ COPY settings.gradle build.gradle ./
 COPY ms-gateway ms-gateway
 COPY ms-inventario ms-inventario
 COPY ms-ventas ms-ventas
+COPY ms-consola ms-consola
 
-# Compila solo el módulo ms-gateway, sin correr tests, generando el JAR
-RUN gradle :ms-gateway:build -x test --no-daemon
+# Compila el fat JAR (con todas las dependencias incluidas: Gson, HikariCP, MySQL connector)
+RUN gradle :ms-gateway:shadowJar -x test --no-daemon
 
 # ── Etapa 2: imagen final, solo runtime ────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-# Copiamos únicamente el JAR ya compilado desde la etapa de build
-COPY --from=build /app/ms-gateway/build/libs/*.jar app.jar
+# Copiamos únicamente el fat JAR (termina en -all.jar) desde la etapa de build
+COPY --from=build /app/ms-gateway/build/libs/*-all.jar app.jar
 
 EXPOSE 8080
 

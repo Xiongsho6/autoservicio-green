@@ -521,6 +521,19 @@ public class Inventario {
                     return InventarioRepository.compensarStock(req.getAsJsonArray("productos"));
                 } else if ("CONSULTAR".equals(accion)) {
                     return InventarioRepository.consultarProductos(req.getAsJsonArray("productos"));
+                } else if ("ADMIN".equals(accion)) {
+                    String opcion = req.has("opcion") ? req.get("opcion").getAsString() : "";
+                    List<String> inputs = new ArrayList<>();
+                    if (req.has("inputs")) {
+                        for (JsonElement el : req.getAsJsonArray("inputs")) {
+                            inputs.add(el.getAsString());
+                        }
+                    }
+                    String salida = SupervisorMenu.ejecutarOpcionRemota(opcion, inputs);
+                    JsonObject resp = new JsonObject();
+                    resp.addProperty("status", "OK");
+                    resp.addProperty("salida", salida);
+                    return resp;
                 } else {
                     return InventarioRepository.procesarVenta(req.getAsJsonArray("productos"));
                 }
@@ -631,6 +644,59 @@ public class Inventario {
         private SupervisorMenu() {
         }
 
+        // ── Lock para evitar que dos peticiones ADMIN concurrentes pisen
+        //     la redirección de System.out al mismo tiempo. ──────────────
+        private static final Object LOCK_CONSOLA = new Object();
+
+        // ── Ejecuta remotamente la misma lógica que el menú local,
+        //     capturando todo lo impreso y devolviéndolo como texto.
+        //     'inputs' simula lo que el supervisor habría tecleado en
+        //     consola para esa opción (en el mismo orden que lo pide). ──
+        static String ejecutarOpcionRemota(String opcion, List<String> inputs) {
+            synchronized (LOCK_CONSOLA) {
+                java.io.PrintStream original = System.out;
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                Scanner scanner = new Scanner(String.join("\n", inputs) + "\n");
+                try {
+                    System.setOut(new java.io.PrintStream(buffer, true, "UTF-8"));
+                    switch (opcion) {
+                        case "1":
+                            mostrarStockCompleto();
+                            break;
+                        case "2":
+                            mostrarBajoStock();
+                            break;
+                        case "3":
+                            buscarProducto(scanner);
+                            break;
+                        case "4":
+                            mostrarHistorialProducto(scanner);
+                            break;
+                        case "5":
+                            agregarProducto(scanner);
+                            break;
+                        case "6":
+                            reabastecerProducto(scanner);
+                            break;
+                        case "7":
+                            mostrarUltimasVentas();
+                            break;
+                        default:
+                            System.out.println("[!] Opcion invalida.");
+                    }
+                } catch (Exception e) {
+                    System.out.println("[ERROR] " + e.getMessage());
+                } finally {
+                    System.setOut(original);
+                }
+                try {
+                    return buffer.toString("UTF-8");
+                } catch (Exception e) {
+                    return buffer.toString();
+                }
+            }
+        }
+
         static void iniciar() {
             Scanner scanner = new Scanner(System.in);
             try {
@@ -639,6 +705,12 @@ public class Inventario {
             }
 
             while (true) {
+                if (!scanner.hasNextLine()) {
+                    // No hay consola interactiva disponible (ej. contenedor Docker
+                    // sin stdin_open/tty). Se detiene el menu sin afectar al resto del servicio.
+                    System.out.println("[INFO] Consola interactiva no disponible. Menu de supervisor desactivado.");
+                    return;
+                }
                 // ── Limpiar pantalla antes de redibujar el menú ──────────
                 limpiarPantalla();
 

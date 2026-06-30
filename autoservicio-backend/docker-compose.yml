@@ -25,6 +25,8 @@ services:
       dockerfile: ms-inventario/Dockerfile
     container_name: ms-inventario
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     environment:
       DB_URL: "jdbc:mysql://mysql:3306/autoservicio_green?useSSL=false&serverTimezone=UTC"
       DB_USER: "root"
@@ -41,6 +43,8 @@ services:
       dockerfile: ms-ventas/Dockerfile
     container_name: ms-ventas
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     environment:
       DB_URL: "jdbc:mysql://mysql:3306/autoservicio_green?useSSL=false&serverTimezone=UTC"
       DB_USER: "root"
@@ -66,6 +70,20 @@ services:
       - ms-ventas
     ports:
       - "8080:8080"
+
+  ms-consola:
+    build:
+      context: .
+      dockerfile: ms-consola/Dockerfile
+    container_name: ms-consola
+    stdin_open: true
+    tty: true
+    environment:
+      MS_INVENTARIO_HOST: "ms-inventario"
+      MS_VENTAS_HOST: "ms-ventas"
+    depends_on:
+      - ms-inventario
+      - ms-ventas
 
 volumes:
   mysql_data:

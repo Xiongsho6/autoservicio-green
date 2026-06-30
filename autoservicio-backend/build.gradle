@@ -1,6 +1,11 @@
+plugins {
+    id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+}
+
 subprojects {
     apply plugin: 'java'
     apply plugin: 'application'
+    apply plugin: 'com.github.johnrengelman.shadow'
 
     repositories {
         mavenCentral()
@@ -34,4 +39,8 @@ project(':ms-inventario') {
 
 project(':ms-ventas') {
     application { mainClass = 'com.autoservicio.ventas.Ventas' }
+}
+
+project(':ms-consola') {
+    application { mainClass = 'com.autoservicio.consola.Consola' }
 }

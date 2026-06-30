@@ -551,6 +551,18 @@ public class Ventas {
                 JsonObject respuesta;
                 if ("REPORTE_GERENCIAL".equals(accion)) {
                     respuesta = VentasService.generarReporteGerencial();
+                } else if ("ADMIN".equals(accion)) {
+                    String opcion = parsed.has("opcion") ? parsed.get("opcion").getAsString() : "";
+                    List<String> inputs = new ArrayList<>();
+                    if (parsed.has("inputs")) {
+                        for (JsonElement el : parsed.getAsJsonArray("inputs")) {
+                            inputs.add(el.getAsString());
+                        }
+                    }
+                    String salidaTexto = SupervisorMenu.ejecutarOpcionRemota(opcion, inputs);
+                    respuesta = new JsonObject();
+                    respuesta.addProperty("status", "OK");
+                    respuesta.addProperty("salida", salidaTexto);
                 } else {
                     respuesta = VentasService.registrarBoleta(jsonRaw);
                 }
@@ -576,6 +588,44 @@ public class Ventas {
         private SupervisorMenu() {
         }
 
+        private static final Object LOCK_CONSOLA = new Object();
+
+        static String ejecutarOpcionRemota(String opcion, List<String> inputs) {
+            synchronized (LOCK_CONSOLA) {
+                java.io.PrintStream original = System.out;
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                Scanner scanner = new Scanner(String.join("\n", inputs) + "\n");
+                try {
+                    System.setOut(new java.io.PrintStream(buffer, true, "UTF-8"));
+                    switch (opcion) {
+                        case "1":
+                            mostrarMetricasTurno();
+                            break;
+                        case "2":
+                            mostrarHistorial();
+                            break;
+                        case "3":
+                            reiniciarTurno(scanner);
+                            break;
+                        case "4":
+                            mostrarDetalleBoleta(scanner);
+                            break;
+                        default:
+                            System.out.println("[!] Opcion invalida.");
+                    }
+                } catch (Exception e) {
+                    System.out.println("[ERROR] " + e.getMessage());
+                } finally {
+                    System.setOut(original);
+                }
+                try {
+                    return buffer.toString("UTF-8");
+                } catch (Exception e) {
+                    return buffer.toString();
+                }
+            }
+        }
+
         static void iniciar() {
             Scanner scanner = new Scanner(System.in);
             try {
@@ -584,6 +634,10 @@ public class Ventas {
             }
 
             while (true) {
+                if (!scanner.hasNextLine()) {
+                    System.out.println("[INFO] Consola interactiva no disponible. Menu de supervisor desactivado.");
+                    return;
+                }
                 // ── Limpiar pantalla antes de redibujar el menú ──
                 limpiarPantalla();
 
