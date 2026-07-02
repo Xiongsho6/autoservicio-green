@@ -15,7 +15,7 @@ Instala lo siguiente según tu sistema operativo:
   - Linux (Debian/Ubuntu):
     ```bash
     sudo apt update
-    sudo apt install -y docker.io docker-compose-plugin
+    sudo apt install -y docker.io docker-compose
     sudo usermod -aG docker $USER   # luego reinicia sesión
     ```
   - Verifica la instalación:
