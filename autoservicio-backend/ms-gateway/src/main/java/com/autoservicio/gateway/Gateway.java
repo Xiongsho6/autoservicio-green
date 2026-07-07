@@ -102,7 +102,8 @@ public class Gateway {
 
         static void registrar(int statusCode, long nanos) {
             PETICIONES_TOTAL.increment();
-            if (statusCode >= 400) ERRORES_TOTAL.increment();
+            if (statusCode >= 400)
+                ERRORES_TOTAL.increment();
             DURACION_PETICION.record(java.time.Duration.ofNanos(nanos));
         }
     }
@@ -266,6 +267,22 @@ public class Gateway {
                     return;
                 }
 
+                // [NUEVO] Validar formato de cada código ANTES de consultar a inventario.
+                // Un codigo_barras con letras/símbolos es un error de formato, distinto
+                // de un codigo bien formado que simplemente no existe en catálogo.
+                for (JsonElement elem : productos) {
+                    JsonObject item = elem.getAsJsonObject();
+                    String codigo = item.has("codigo") ? item.get("codigo").getAsString() : "";
+                    if (!codigo.matches("\\d+")) {
+                        LOG.warning("[FORMATO] Codigo invalido desde " + ipCaja + ": '" + codigo
+                                + "' contiene caracteres no numericos.");
+                        enviarRespuestaHttp(exchange, 400,
+                                "{\"status\":\"ERROR\",\"error\":\"Codigo invalido: '" + codigo
+                                        + "' debe contener solo numeros.\"}");
+                        return;
+                    }
+                }
+
                 // ── FASE 1: Inventario ─────────────────────────────────────────
                 // VERIFICAR = solo consulta nombre/precio sin descontar stock.
                 // Cualquier otra acción (PAGAR) = descuenta stock.
@@ -274,8 +291,17 @@ public class Gateway {
                     payloadConsulta.add("productos", productos);
                     payloadConsulta.addProperty("accion", "CONSULTAR");
 
-                    JsonObject respConsulta = consultarMicroservicioTCP(
-                            MS_INVENTARIO_HOST, MS_INVENTARIO_PUERTO, payloadConsulta.toString());
+                    JsonObject respConsulta;
+                    try {
+                        respConsulta = consultarMicroservicioTCP(
+                                MS_INVENTARIO_HOST, MS_INVENTARIO_PUERTO, payloadConsulta.toString());
+                    } catch (java.net.ConnectException | java.net.SocketTimeoutException connEx) {
+                        LOG.severe("[GATEWAY] ms-inventario CAIDO/INALCANZABLE (" + MS_INVENTARIO_HOST + ":"
+                                + MS_INVENTARIO_PUERTO + "): " + connEx.getMessage());
+                        enviarRespuestaHttp(exchange, 503,
+                                "{\"error\":\"Servicio de inventario no disponible.\"}");
+                        return;
+                    }
 
                     if ("OK".equals(respConsulta.get("status").getAsString())) {
                         enviarRespuestaHttp(exchange, 200, respConsulta.toString());
@@ -283,6 +309,7 @@ public class Gateway {
                         String msg = respConsulta.has("mensaje")
                                 ? respConsulta.get("mensaje").getAsString()
                                 : "Error de inventario";
+                        LOG.warning("[VERIFICAR] Codigo invalido desde " + ipCaja + ": " + msg);
                         enviarRespuestaHttp(exchange, 400,
                                 "{\"status\":\"ERROR\",\"error\":\"" + msg + "\"}");
                     }
@@ -294,14 +321,24 @@ public class Gateway {
                 payloadInv.add("productos", productos);
                 payloadInv.addProperty("accion", accion);
 
-                JsonObject respInv = consultarMicroservicioTCP(
-                        MS_INVENTARIO_HOST, MS_INVENTARIO_PUERTO, payloadInv.toString());
+                JsonObject respInv;
+                try {
+                    respInv = consultarMicroservicioTCP(
+                            MS_INVENTARIO_HOST, MS_INVENTARIO_PUERTO, payloadInv.toString());
+                } catch (java.net.ConnectException | java.net.SocketTimeoutException connEx) {
+                    LOG.severe("[GATEWAY] ms-inventario CAIDO/INALCANZABLE (" + MS_INVENTARIO_HOST + ":"
+                            + MS_INVENTARIO_PUERTO + "): " + connEx.getMessage());
+                    enviarRespuestaHttp(exchange, 503,
+                            "{\"error\":\"Servicio de inventario no disponible.\"}");
+                    return;
+                }
 
                 // ── FASE 2: Cobro final ────────────────────────────────────────
                 if (!"OK".equals(respInv.get("status").getAsString())) {
                     String msg = respInv.has("mensaje")
                             ? respInv.get("mensaje").getAsString()
                             : "Error de inventario";
+                    LOG.warning("[PAGAR] Rechazado por inventario desde " + ipCaja + ": " + msg);
                     enviarRespuestaHttp(exchange, 400, "{\"error\":\"" + msg + "\"}");
                     return;
                 }
@@ -337,8 +374,19 @@ public class Gateway {
                 reqVentas.addProperty("total", total);
                 reqVentas.add("detalles", detallesVerificados);
 
-                JsonObject respVentas = consultarMicroservicioTCP(
-                        MS_VENTAS_HOST, MS_VENTAS_PUERTO, reqVentas.toString());
+                JsonObject respVentas;
+                try {
+                    respVentas = consultarMicroservicioTCP(
+                            MS_VENTAS_HOST, MS_VENTAS_PUERTO, reqVentas.toString());
+                } catch (java.net.ConnectException | java.net.SocketTimeoutException connEx) {
+                    LOG.severe("[GATEWAY] ms-ventas CAIDO/INALCANZABLE (" + MS_VENTAS_HOST + ":"
+                            + MS_VENTAS_PUERTO + "): " + connEx.getMessage()
+                            + " — Iniciando compensación de stock...");
+                    compensarStockTCP(detallesVerificados);
+                    enviarRespuestaHttp(exchange, 503,
+                            "{\"error\":\"Servicio de ventas no disponible. Stock restaurado.\"}");
+                    return;
+                }
 
                 if ("SUCCESS".equals(respVentas.get("status").getAsString())) {
                     int idBoleta = respVentas.get("boleta_id").getAsInt();
