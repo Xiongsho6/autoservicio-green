@@ -57,11 +57,55 @@ import java.util.logging.Logger;
 //  [6] MEDIO    cajaId solo usaba el último octeto de la IP, provocando
 //               colisiones con NAT. Ahora lee caja_id del JSON si viene,
 //               y usa la IP como fallback.
+//
+//  [7] NUEVO    Logging con colores ANSI en consola (rojo=error,
+//               amarillo=warning, verde=venta exitosa, cyan=info).
 // ═══════════════════════════════════════════════════════════════════════════
 
 public class Gateway {
 
     private static final Logger LOG = Logger.getLogger("Gateway");
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ANSI — Colores para consola (funciona en Debian/Linux por defecto)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    static final class Ansi {
+        static final String RESET = "\u001B[0m";
+        static final String RED = "\u001B[31m";
+        static final String GREEN = "\u001B[32m";
+        static final String YELLOW = "\u001B[33m";
+        static final String CYAN = "\u001B[36m";
+        static final String BOLD = "\u001B[1m";
+    }
+
+    /** Formatter personalizado para java.util.logging: colorea segun el nivel. */
+    static final class ColorFormatter extends java.util.logging.Formatter {
+        @Override
+        public String format(java.util.logging.LogRecord record) {
+            String color;
+            if (record.getLevel() == java.util.logging.Level.SEVERE) {
+                color = Ansi.RED;
+            } else if (record.getLevel() == java.util.logging.Level.WARNING) {
+                color = Ansi.YELLOW;
+            } else {
+                color = Ansi.CYAN;
+            }
+            String hora = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            return String.format("%s[%s] %s%s%s%n", color, hora, Ansi.BOLD, record.getMessage(), Ansi.RESET);
+        }
+    }
+
+    /** Reemplaza el handler de consola por defecto por uno con colores. */
+    static void configurarLoggerColor() {
+        Logger rootLogger = Logger.getLogger("");
+        for (java.util.logging.Handler h : rootLogger.getHandlers()) {
+            rootLogger.removeHandler(h);
+        }
+        java.util.logging.ConsoleHandler handler = new java.util.logging.ConsoleHandler();
+        handler.setFormatter(new ColorFormatter());
+        rootLogger.addHandler(handler);
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // METRICS — Exposición de métricas Prometheus en /metrics
@@ -127,7 +171,8 @@ public class Gateway {
     private static final int TIMEOUT_LECTURA = 10_000; // [3] CORRECCIÓN
 
     public static void main(String[] args) {
-        System.out.println("=== API GATEWAY HTTP REST [Puerto " + PUERTO_HTTP + "] ===");
+        configurarLoggerColor(); // [7] NUEVO: logging con colores
+        System.out.println(Ansi.CYAN + "=== API GATEWAY HTTP REST [Puerto " + PUERTO_HTTP + "] ===" + Ansi.RESET);
         Metrics.init();
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(PUERTO_HTTP), 0);
@@ -136,7 +181,7 @@ public class Gateway {
             server.createContext("/metrics", Metrics::handleMetrics);
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
-            System.out.println("Servidor HTTP listo. Esperando peticiones...");
+            System.out.println(Ansi.GREEN + "Servidor HTTP listo. Esperando peticiones..." + Ansi.RESET);
         } catch (Exception e) {
             LOG.severe("[GATEWAY] Error al levantar HTTP: " + e.getMessage());
         }
@@ -391,7 +436,8 @@ public class Gateway {
                 if ("SUCCESS".equals(respVentas.get("status").getAsString())) {
                     int idBoleta = respVentas.get("boleta_id").getAsInt();
 
-                    System.out.println("------------------------------------------------");
+                    // [7] NUEVO: bloque de venta exitosa en verde
+                    System.out.println(Ansi.GREEN + "------------------------------------------------");
                     System.out.println("  TRANSACCION COMPLETA");
                     System.out.println("  Boleta Nro : " + idBoleta);
                     System.out.println("  Origen     : " + cajaId);
@@ -408,7 +454,7 @@ public class Gateway {
                     }
                     System.out.println("  .............................................");
                     System.out.printf("  Monto Total: S/. %.2f%n", total);
-                    System.out.println("------------------------------------------------");
+                    System.out.println("------------------------------------------------" + Ansi.RESET);
 
                     JsonObject respOk = new JsonObject();
                     respOk.addProperty("status", "SUCCESS");
