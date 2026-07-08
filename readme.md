@@ -4,6 +4,18 @@ Sistema distribuido multiservicio de arquitectura modular que integra un backend
 
 El backend está compuesto por **3 microservicios** (`ms-gateway`, `ms-inventario`, `ms-ventas`) más un **panel de administración** (`ms-consola`) que permite supervisar el sistema sin duplicar lógica de negocio.
 
+## 👥 Integrantes del equipo
+
+| N°  | Apellidos y nombres               | Responsabilidad |
+| --- | --------------------------------- | --------------- |
+| 1   | Fernández Sánchez, Jaren Fabrizio | Programador     |
+| 2   | Sáenz Inga, Moisés David          | Arquitecto      |
+| 3   | López Dávila, Pervis Joseph       | Asistente       |
+
+## 🎓 Docente
+
+- **Ronald Miguel Serrano Hernandez** — Curso de Principio de los Sistemas de Software Distribuido
+
 ---
 
 ## 🛠️ Requisitos Previos (máquina virtual desde cero)
@@ -307,3 +319,14 @@ chmod +x gradlew
 > ```
 
 Luego sigue con el **Paso 6** (Frontend) y **Paso 7** (Caja C++) descritos arriba.
+
+## 📊 Monitoreo (Prometheus / Grafana)
+
+El sistema incluye un stack de observabilidad con Prometheus y Grafana. Cada microservicio expone métricas en `/metrics` (vía Micrometer), y Prometheus las recolecta cada 5 segundos.
+
+- **Prometheus:** `http://<IP_SERVIDOR>:9090`
+  - Verifica el estado de los targets en: `http://<IP_SERVIDOR>:9090/targets` (ms-gateway, ms-inventario y ms-ventas deben aparecer como `UP`).
+- **Grafana:** `http://<IP_SERVIDOR>:3000`
+  - Dashboard: **"Autoservicio Green - Monitoreo"**, con paneles de estado (activo/caído), peticiones por segundo, tasa de errores, latencia y consumo de recursos (CPU/memoria) por microservicio.
+
+> Reemplaza `<IP_SERVIDOR>` por `localhost` en desarrollo local, o por la IP del servidor Debian en un despliegue en red (ver sección de configuración de red más arriba).
