@@ -340,7 +340,7 @@ public class Gateway {
                     try {
                         respConsulta = consultarMicroservicioTCP(
                                 MS_INVENTARIO_HOST, MS_INVENTARIO_PUERTO, payloadConsulta.toString());
-                    } catch (java.net.ConnectException | java.net.SocketTimeoutException connEx) {
+                    } catch (java.io.IOException connEx) {
                         LOG.severe("[GATEWAY] ms-inventario CAIDO/INALCANZABLE (" + MS_INVENTARIO_HOST + ":"
                                 + MS_INVENTARIO_PUERTO + "): " + connEx.getMessage());
                         enviarRespuestaHttp(exchange, 503,
@@ -370,7 +370,7 @@ public class Gateway {
                 try {
                     respInv = consultarMicroservicioTCP(
                             MS_INVENTARIO_HOST, MS_INVENTARIO_PUERTO, payloadInv.toString());
-                } catch (java.net.ConnectException | java.net.SocketTimeoutException connEx) {
+                } catch (java.io.IOException connEx) {
                     LOG.severe("[GATEWAY] ms-inventario CAIDO/INALCANZABLE (" + MS_INVENTARIO_HOST + ":"
                             + MS_INVENTARIO_PUERTO + "): " + connEx.getMessage());
                     enviarRespuestaHttp(exchange, 503,
@@ -423,7 +423,7 @@ public class Gateway {
                 try {
                     respVentas = consultarMicroservicioTCP(
                             MS_VENTAS_HOST, MS_VENTAS_PUERTO, reqVentas.toString());
-                } catch (java.net.ConnectException | java.net.SocketTimeoutException connEx) {
+                } catch (java.io.IOException connEx) {
                     LOG.severe("[GATEWAY] ms-ventas CAIDO/INALCANZABLE (" + MS_VENTAS_HOST + ":"
                             + MS_VENTAS_PUERTO + "): " + connEx.getMessage()
                             + " — Iniciando compensación de stock...");

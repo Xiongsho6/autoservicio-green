@@ -54,6 +54,12 @@ Docker Compose construye las 4 imágenes (gateway, inventario, ventas, consola) 
 docker compose up -d --build
 ```
 
+```bash
+docker compose up -d mysql
+watch docker compose ps
+docker compose up -d --build
+```
+
 Espera unos segundos a que termine. Para confirmar que los 4 contenedores están corriendo:
 
 ```bash
